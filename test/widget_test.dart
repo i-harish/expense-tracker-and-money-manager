@@ -61,7 +61,7 @@ void main() {
       // Tap Credit Cards tab
       await tester.tap(find.text('Credit Cards'));
       await tester.pumpAndSettle();
-      expect(find.text('Coming soon'), findsWidgets);
+      expect(find.text('No credit cards yet'), findsWidgets);
 
       // Tap Dashboard tab to return
       await tester.tap(find.text('Dashboard'));

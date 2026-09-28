@@ -27,13 +27,15 @@ void main() {
 
   group('Milestone 2: Local Database Tests', () {
     test('Test 1 — Database initialization', () async {
-      expect(database.schemaVersion, equals(1));
+      expect(database.schemaVersion, equals(2));
       final accounts = await database.select(database.accounts).get();
       expect(accounts, isEmpty);
       final transactions = await database.select(database.transactions).get();
       expect(transactions, isEmpty);
       final budgets = await database.select(database.budgets).get();
       expect(budgets, isEmpty);
+      final creditCards = await database.select(database.creditCards).get();
+      expect(creditCards, isEmpty);
     });
 
     test('Test 2 — Account insertion', () async {
