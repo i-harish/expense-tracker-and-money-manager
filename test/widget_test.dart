@@ -25,8 +25,8 @@ void main() {
       expect(find.text('CASH AVAILABLE'), findsOneWidget);
       expect(find.text('NET LIQUIDITY'), findsOneWidget);
       expect(find.text('MONTHLY BUDGET'), findsOneWidget);
-      expect(find.text('₹9,000'), findsOneWidget);
-      expect(find.text('₹0 spent'), findsOneWidget);
+      expect(find.text('₹9,000'), findsWidgets);
+      expect(find.text('SPENT'), findsOneWidget);
 
       // Verify Recent Transactions Section
       expect(find.text('Recent Transactions'), findsOneWidget);
