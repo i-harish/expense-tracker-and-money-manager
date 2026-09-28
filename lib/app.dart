@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'theme/app_theme.dart';
-import 'screens/dashboard/dashboard_screen.dart';
-import 'screens/transactions/transactions_screen.dart';
-import 'screens/family/family_screen.dart';
+import 'screens/accounts/accounts_screen.dart';
 import 'screens/credit_cards/credit_cards_screen.dart';
+import 'screens/dashboard/dashboard_screen.dart';
+import 'screens/family/family_screen.dart';
+import 'screens/transactions/transactions_screen.dart';
+import 'theme/app_theme.dart';
 
 class FamilyMoneyManagerApp extends StatelessWidget {
   const FamilyMoneyManagerApp({super.key});
@@ -41,6 +42,19 @@ class _MainShellScreenState extends State<MainShellScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Family Money Manager'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.account_balance_wallet_outlined),
+            tooltip: 'Accounts',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const AccountsScreen(),
+                ),
+              );
+            },
+          ),
+        ],
       ),
       body: SafeArea(
         child: IndexedStack(

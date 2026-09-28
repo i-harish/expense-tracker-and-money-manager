@@ -1,8 +1,14 @@
+import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:expense_tracker_and_money_manager/app.dart';
+import 'package:expense_tracker_and_money_manager/core/database/app_database.dart';
 
 void main() {
+  setUp(() {
+    AppDatabase.instance = AppDatabase.forTesting(NativeDatabase.memory());
+  });
+
   group('Family Money Manager Dashboard Shell Tests', () {
     testWidgets('App starts and displays basic dashboard shell elements',
         (WidgetTester tester) async {
@@ -45,7 +51,7 @@ void main() {
       // Tap Transactions tab
       await tester.tap(find.text('Transactions'));
       await tester.pumpAndSettle();
-      expect(find.text('Coming soon'), findsWidgets);
+      expect(find.text('No transactions yet'), findsWidgets);
 
       // Tap Family tab
       await tester.tap(find.text('Family'));
