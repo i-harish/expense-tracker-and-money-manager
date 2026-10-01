@@ -29,6 +29,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   late final BudgetService _budgetService;
 
   double _cashAvailable = 0.0;
+  double _netLiquidity = 0.0;
   BudgetSummary? _budgetSummary;
   List<TransactionWithAccount> _recentTransactions = [];
 
@@ -45,12 +46,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _loadDashboardData() async {
     try {
       final cash = await _financialService.getCashAvailable();
+      final netLiquidity = await _financialService.getNetLiquidity();
       final budget = await _budgetService.getMonthlyBudgetSummary();
       final allTx = await _financialService.getTransactionsWithAccount();
 
       if (mounted) {
         setState(() {
           _cashAvailable = cash;
+          _netLiquidity = netLiquidity;
           _budgetSummary = budget;
           _recentTransactions = allTx.take(5).toList();
         });
@@ -79,6 +82,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final cashFormatted = CurrencyFormatter.format(_cashAvailable);
+    final netLiquidityFormatted = CurrencyFormatter.format(_netLiquidity);
     final summary = _budgetSummary ??
         const BudgetSummary(
           period: '2026-09',
@@ -118,7 +122,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             // Net Liquidity Card
             FinancialSummaryCard(
               label: 'NET LIQUIDITY',
-              amount: cashFormatted,
+              amount: netLiquidityFormatted,
               icon: Icons.savings_outlined,
               accentColor: AppTheme.secondaryColor,
             ),
@@ -182,15 +186,56 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   final item = _recentTransactions[index];
                   final tx = item.transaction;
                   final account = item.account;
+                  final card = item.creditCard;
                   final isIncome = tx.type == TransactionType.income;
+                  final isCreditCardPurchase =
+                      tx.type == TransactionType.creditCardPurchase;
+                  final isCreditCardPayment =
+                      tx.type == TransactionType.creditCardPayment;
 
                   final title = tx.description?.isNotEmpty == true
                       ? tx.description!
-                      : (isIncome ? 'Income' : 'Expense');
+                      : (isIncome
+                          ? 'Income'
+                          : (isCreditCardPayment
+                              ? '${card?.name ?? 'Credit Card'} Bill Payment'
+                              : (isCreditCardPurchase
+                                  ? '${card?.name ?? 'Credit Card'} Purchase'
+                                  : 'Expense')));
                   final amountPrefix = isIncome ? '+' : '-';
                   final amountColor = isIncome
                       ? const Color(0xFF16A34A)
                       : Colors.red.shade700;
+
+                  final iconData = isIncome
+                      ? Icons.arrow_upward
+                      : (isCreditCardPayment
+                          ? Icons.payments_outlined
+                          : (isCreditCardPurchase
+                              ? Icons.credit_card_outlined
+                              : Icons.arrow_downward));
+
+                  final iconBgColor = isIncome
+                      ? const Color(0xFF16A34A).withValues(alpha: 0.12)
+                      : (isCreditCardPayment
+                          ? const Color(0xFF2563EB).withValues(alpha: 0.12)
+                          : (isCreditCardPurchase
+                              ? AppTheme.secondaryColor.withValues(alpha: 0.12)
+                              : Colors.red.withValues(alpha: 0.12)));
+
+                  final iconColor = isIncome
+                      ? const Color(0xFF16A34A)
+                      : (isCreditCardPayment
+                          ? const Color(0xFF2563EB)
+                          : (isCreditCardPurchase
+                              ? AppTheme.secondaryColor
+                              : Colors.red.shade700));
+
+                  final sourceLabel = isCreditCardPayment
+                      ? '${card?.name ?? 'Credit Card'} • From ${account?.name ?? 'Account'}'
+                      : (isCreditCardPurchase
+                          ? '${card?.name ?? 'Credit Card'} ****${card?.lastFourDigits ?? ''}'
+                          : (account?.name ?? 'Account'));
 
                   return Card(
                     child: Padding(
@@ -202,17 +247,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             width: 38,
                             height: 38,
                             decoration: BoxDecoration(
-                              color: isIncome
-                                  ? const Color(0xFF16A34A)
-                                      .withValues(alpha: 0.12)
-                                  : Colors.red.withValues(alpha: 0.12),
+                              color: iconBgColor,
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: Icon(
-                              isIncome
-                                  ? Icons.arrow_upward
-                                  : Icons.arrow_downward,
-                              color: amountColor,
+                              iconData,
+                              color: iconColor,
                               size: 18,
                             ),
                           ),
@@ -231,7 +271,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
-                                  '${account.name} • ${DateFormatter.format(tx.transactionDate)}',
+                                  '$sourceLabel • ${DateFormatter.format(tx.transactionDate)}',
                                   style: const TextStyle(
                                     fontSize: 12,
                                     color: AppTheme.textSecondary,
@@ -241,7 +281,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             ),
                           ),
                           Text(
-                            '$amountPrefix${CurrencyFormatter.format(tx.amount, currency: account.currency)}',
+                            '$amountPrefix${CurrencyFormatter.format(tx.amount, currency: account?.currency ?? 'INR')}',
                             style: TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.bold,

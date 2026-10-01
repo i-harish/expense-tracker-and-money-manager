@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 
 import '../../core/database/app_database.dart';
+import '../../core/database/tables/accounts.dart';
 import '../../core/database/tables/transactions.dart';
 
 class InsufficientBalanceException implements Exception {
@@ -10,10 +11,25 @@ class InsufficientBalanceException implements Exception {
   String toString() => message;
 }
 
+class InsufficientCreditException implements Exception {
+  final String message;
+  InsufficientCreditException([this.message = 'Insufficient available credit']);
+  @override
+  String toString() => message;
+}
+
 class InactiveAccountException implements Exception {
   final String message;
   InactiveAccountException(
       [this.message = 'Cannot record transaction for an inactive account']);
+  @override
+  String toString() => message;
+}
+
+class InactiveCreditCardException implements Exception {
+  final String message;
+  InactiveCreditCardException(
+      [this.message = 'Cannot record transaction for an inactive credit card']);
   @override
   String toString() => message;
 }
@@ -27,11 +43,13 @@ class InvalidTransactionException implements Exception {
 
 class TransactionWithAccount {
   final Transaction transaction;
-  final Account account;
+  final Account? account;
+  final CreditCard? creditCard;
 
   const TransactionWithAccount({
     required this.transaction,
-    required this.account,
+    this.account,
+    this.creditCard,
   });
 }
 
@@ -50,9 +68,28 @@ abstract class FinancialService {
     DateTime? transactionDate,
   });
 
+  Future<int> recordCreditCardPurchase({
+    required int creditCardId,
+    required double amount,
+    String? description,
+    DateTime? transactionDate,
+  });
+
+  Future<int> recordCreditCardPayment({
+    required int creditCardId,
+    required int sourceAccountId,
+    required double amount,
+    String? description,
+    DateTime? transactionDate,
+  });
+
   Future<List<TransactionWithAccount>> getTransactionsWithAccount();
 
   Future<double> getCashAvailable();
+
+  Future<double> getTotalCreditCardOutstanding();
+
+  Future<double> getNetLiquidity();
 }
 
 class DriftFinancialService implements FinancialService {
@@ -100,7 +137,7 @@ class DriftFinancialService implements FinancialService {
 
       final transactionId = await _db.into(_db.transactions).insert(
             TransactionsCompanion.insert(
-              accountId: accountId,
+              accountId: Value(accountId),
               type: TransactionType.income,
               amount: amount,
               description: Value(description?.trim().isEmpty == true
@@ -161,8 +198,169 @@ class DriftFinancialService implements FinancialService {
 
       final transactionId = await _db.into(_db.transactions).insert(
             TransactionsCompanion.insert(
-              accountId: accountId,
+              accountId: Value(accountId),
               type: TransactionType.expense,
+              amount: amount,
+              description: Value(description?.trim().isEmpty == true
+                  ? null
+                  : description?.trim()),
+              transactionDate: Value(effectiveDate),
+              createdAt: Value(now),
+              updatedAt: Value(now),
+            ),
+          );
+
+      return transactionId;
+    });
+  }
+
+  @override
+  Future<int> recordCreditCardPurchase({
+    required int creditCardId,
+    required double amount,
+    String? description,
+    DateTime? transactionDate,
+  }) async {
+    if (amount <= 0) {
+      throw InvalidTransactionException('Amount must be greater than zero');
+    }
+
+    final now = DateTime.now();
+    final effectiveDate = transactionDate ?? now;
+
+    return _db.transaction(() async {
+      final creditCard = await (_db.select(_db.creditCards)
+            ..where((tbl) => tbl.id.equals(creditCardId)))
+          .getSingleOrNull();
+
+      if (creditCard == null) {
+        throw InvalidTransactionException('Credit card not found');
+      }
+
+      if (!creditCard.isActive) {
+        throw InactiveCreditCardException(
+            'Cannot record transaction for an inactive credit card');
+      }
+
+      final availableCredit =
+          creditCard.creditLimit - creditCard.outstandingBalance;
+      if (amount > availableCredit) {
+        throw InsufficientCreditException('Insufficient available credit');
+      }
+
+      final newOutstanding = creditCard.outstandingBalance + amount;
+
+      await (_db.update(_db.creditCards)
+            ..where((tbl) => tbl.id.equals(creditCardId)))
+          .write(
+        CreditCardsCompanion(
+          outstandingBalance: Value(newOutstanding),
+          updatedAt: Value(now),
+        ),
+      );
+
+      final transactionId = await _db.into(_db.transactions).insert(
+            TransactionsCompanion.insert(
+              creditCardId: Value(creditCardId),
+              type: TransactionType.creditCardPurchase,
+              amount: amount,
+              description: Value(description?.trim().isEmpty == true
+                  ? null
+                  : description?.trim()),
+              transactionDate: Value(effectiveDate),
+              createdAt: Value(now),
+              updatedAt: Value(now),
+            ),
+          );
+
+      return transactionId;
+    });
+  }
+
+  @override
+  Future<int> recordCreditCardPayment({
+    required int creditCardId,
+    required int sourceAccountId,
+    required double amount,
+    String? description,
+    DateTime? transactionDate,
+  }) async {
+    if (amount <= 0) {
+      throw InvalidTransactionException('Amount must be greater than zero');
+    }
+
+    final now = DateTime.now();
+    final effectiveDate = transactionDate ?? now;
+
+    return _db.transaction(() async {
+      final creditCard = await (_db.select(_db.creditCards)
+            ..where((tbl) => tbl.id.equals(creditCardId)))
+          .getSingleOrNull();
+
+      if (creditCard == null) {
+        throw InvalidTransactionException('Credit card not found');
+      }
+
+      if (!creditCard.isActive) {
+        throw InactiveCreditCardException(
+            'Cannot record transaction for an inactive credit card');
+      }
+
+      final account = await (_db.select(_db.accounts)
+            ..where((tbl) => tbl.id.equals(sourceAccountId)))
+          .getSingleOrNull();
+
+      if (account == null) {
+        throw InvalidTransactionException('Account not found');
+      }
+
+      if (!account.isActive) {
+        throw InactiveAccountException(
+            'Cannot record transaction for an inactive account');
+      }
+
+      if (account.type != AccountType.bank &&
+          account.type != AccountType.savings &&
+          account.type != AccountType.cash) {
+        throw InvalidTransactionException(
+            'Source account must be an asset account');
+      }
+
+      if (amount > creditCard.outstandingBalance) {
+        throw InvalidTransactionException(
+            'Payment exceeds outstanding balance');
+      }
+
+      if (amount > account.balance) {
+        throw InsufficientBalanceException('Insufficient account balance');
+      }
+
+      final newOutstanding = creditCard.outstandingBalance - amount;
+      final newAccountBalance = account.balance - amount;
+
+      await (_db.update(_db.creditCards)
+            ..where((tbl) => tbl.id.equals(creditCardId)))
+          .write(
+        CreditCardsCompanion(
+          outstandingBalance: Value(newOutstanding),
+          updatedAt: Value(now),
+        ),
+      );
+
+      await (_db.update(_db.accounts)
+            ..where((tbl) => tbl.id.equals(sourceAccountId)))
+          .write(
+        AccountsCompanion(
+          balance: Value(newAccountBalance),
+          updatedAt: Value(now),
+        ),
+      );
+
+      final transactionId = await _db.into(_db.transactions).insert(
+            TransactionsCompanion.insert(
+              accountId: Value(sourceAccountId),
+              creditCardId: Value(creditCardId),
+              type: TransactionType.creditCardPayment,
               amount: amount,
               description: Value(description?.trim().isEmpty == true
                   ? null
@@ -180,9 +378,13 @@ class DriftFinancialService implements FinancialService {
   @override
   Future<List<TransactionWithAccount>> getTransactionsWithAccount() async {
     final query = _db.select(_db.transactions).join([
-      innerJoin(
+      leftOuterJoin(
         _db.accounts,
         _db.accounts.id.equalsExp(_db.transactions.accountId),
+      ),
+      leftOuterJoin(
+        _db.creditCards,
+        _db.creditCards.id.equalsExp(_db.transactions.creditCardId),
       ),
     ])
       ..orderBy([
@@ -200,7 +402,8 @@ class DriftFinancialService implements FinancialService {
     return rows.map((row) {
       return TransactionWithAccount(
         transaction: row.readTable(_db.transactions),
-        account: row.readTable(_db.accounts),
+        account: row.readTableOrNull(_db.accounts),
+        creditCard: row.readTableOrNull(_db.creditCards),
       );
     }).toList();
   }
@@ -216,4 +419,24 @@ class DriftFinancialService implements FinancialService {
       (sum, account) => sum + account.balance,
     );
   }
+
+  @override
+  Future<double> getTotalCreditCardOutstanding() async {
+    final activeCards = await (_db.select(_db.creditCards)
+          ..where((tbl) => tbl.isActive.equals(true)))
+        .get();
+
+    return activeCards.fold<double>(
+      0.0,
+      (sum, card) => sum + card.outstandingBalance,
+    );
+  }
+
+  @override
+  Future<double> getNetLiquidity() async {
+    final cash = await getCashAvailable();
+    final creditOutstanding = await getTotalCreditCardOutstanding();
+    return cash - creditOutstanding;
+  }
 }
+

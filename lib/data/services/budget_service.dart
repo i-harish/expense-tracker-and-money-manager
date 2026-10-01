@@ -113,7 +113,8 @@ class DriftBudgetService implements BudgetService {
 
     final expenses = await (_db.select(_db.transactions)
           ..where((tbl) =>
-              tbl.type.equalsValue(TransactionType.expense) &
+              (tbl.type.equalsValue(TransactionType.expense) |
+                  tbl.type.equalsValue(TransactionType.creditCardPurchase)) &
               tbl.transactionDate.isBiggerOrEqualValue(startOfMonth) &
               tbl.transactionDate.isSmallerThanValue(startOfNextMonth)))
         .get();

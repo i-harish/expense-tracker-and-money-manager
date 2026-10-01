@@ -9,12 +9,14 @@ class CreditCardItemCard extends StatelessWidget {
   final CreditCard card;
   final VoidCallback onEdit;
   final VoidCallback onDeactivate;
+  final VoidCallback? onPayment;
 
   const CreditCardItemCard({
     super.key,
     required this.card,
     required this.onEdit,
     required this.onDeactivate,
+    this.onPayment,
   });
 
   Color _getUtilizationColor(double utilization) {
@@ -310,6 +312,40 @@ class CreditCardItemCard extends StatelessWidget {
                   ],
                 ),
               ),
+            ],
+            if (onPayment != null) ...[
+              const SizedBox(height: 14),
+              if (card.outstandingBalance > 0)
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: onPayment,
+                    icon: const Icon(Icons.payments_outlined, size: 16),
+                    label: const Text('Make Payment'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppTheme.primaryColor,
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                )
+              else
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: null,
+                    icon: const Icon(Icons.check_circle_outline, size: 16),
+                    label: const Text('No Payment Due'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ],
         ),

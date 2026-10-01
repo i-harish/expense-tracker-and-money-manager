@@ -5,7 +5,8 @@ import '../../core/database/tables/transactions.dart';
 
 abstract class TransactionRepository {
   Future<int> createTransaction({
-    required int accountId,
+    int? accountId,
+    int? creditCardId,
     required TransactionType type,
     required double amount,
     String? description,
@@ -18,6 +19,8 @@ abstract class TransactionRepository {
 
   Future<List<Transaction>> getTransactionsByAccountId(int accountId);
 
+  Future<List<Transaction>> getTransactionsByCreditCardId(int creditCardId);
+
   Future<int> deleteTransaction(int id);
 }
 
@@ -28,7 +31,8 @@ class DriftTransactionRepository implements TransactionRepository {
 
   @override
   Future<int> createTransaction({
-    required int accountId,
+    int? accountId,
+    int? creditCardId,
     required TransactionType type,
     required double amount,
     String? description,
@@ -39,7 +43,8 @@ class DriftTransactionRepository implements TransactionRepository {
 
     return _db.into(_db.transactions).insert(
           TransactionsCompanion.insert(
-            accountId: accountId,
+            accountId: Value(accountId),
+            creditCardId: Value(creditCardId),
             type: type,
             amount: amount,
             description: Value(description),
@@ -72,6 +77,20 @@ class DriftTransactionRepository implements TransactionRepository {
   Future<List<Transaction>> getTransactionsByAccountId(int accountId) async {
     return (_db.select(_db.transactions)
           ..where((tbl) => tbl.accountId.equals(accountId))
+          ..orderBy([
+            (tbl) => OrderingTerm(
+                  expression: tbl.transactionDate,
+                  mode: OrderingMode.desc,
+                ),
+          ]))
+        .get();
+  }
+
+  @override
+  Future<List<Transaction>> getTransactionsByCreditCardId(
+      int creditCardId) async {
+    return (_db.select(_db.transactions)
+          ..where((tbl) => tbl.creditCardId.equals(creditCardId))
           ..orderBy([
             (tbl) => OrderingTerm(
                   expression: tbl.transactionDate,

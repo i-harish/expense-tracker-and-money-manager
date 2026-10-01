@@ -4,6 +4,7 @@ import '../../core/database/tables/transactions.dart';
 import '../../core/utils/currency_formatter.dart';
 import '../../core/utils/date_formatter.dart';
 import '../../data/repositories/account_repository.dart';
+import '../../data/repositories/credit_card_repository.dart';
 import '../../data/services/financial_service.dart';
 import '../../theme/app_theme.dart';
 import 'widgets/transaction_form_dialog.dart';
@@ -11,11 +12,13 @@ import 'widgets/transaction_form_dialog.dart';
 class TransactionsScreen extends StatefulWidget {
   final FinancialService? financialService;
   final AccountRepository? accountRepository;
+  final CreditCardRepository? creditCardRepository;
 
   const TransactionsScreen({
     super.key,
     this.financialService,
     this.accountRepository,
+    this.creditCardRepository,
   });
 
   @override
@@ -25,6 +28,7 @@ class TransactionsScreen extends StatefulWidget {
 class _TransactionsScreenState extends State<TransactionsScreen> {
   late final FinancialService _financialService;
   late final AccountRepository _accountRepository;
+  late final CreditCardRepository _creditCardRepository;
 
   List<TransactionWithAccount> _transactions = [];
   bool _isLoading = true;
@@ -38,6 +42,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
         widget.financialService ?? DriftFinancialService(db);
     _accountRepository =
         widget.accountRepository ?? DriftAccountRepository(db);
+    _creditCardRepository =
+        widget.creditCardRepository ?? DriftCreditCardRepository(db);
     _loadTransactions();
   }
 
@@ -72,6 +78,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
       builder: (context) => TransactionFormDialog(
         financialService: _financialService,
         accountRepository: _accountRepository,
+        creditCardRepository: _creditCardRepository,
       ),
     );
 
@@ -198,20 +205,56 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
           final item = _transactions[index];
           final tx = item.transaction;
           final account = item.account;
+          final card = item.creditCard;
           final isIncome = tx.type == TransactionType.income;
+          final isCreditCardPurchase =
+              tx.type == TransactionType.creditCardPurchase;
+          final isCreditCardPayment =
+              tx.type == TransactionType.creditCardPayment;
 
           final title = tx.description?.isNotEmpty == true
               ? tx.description!
-              : (isIncome ? 'Income' : 'Expense');
+              : (isIncome
+                  ? 'Income'
+                  : (isCreditCardPayment
+                      ? '${card?.name ?? 'Credit Card'} Bill Payment'
+                      : (isCreditCardPurchase
+                          ? '${card?.name ?? 'Credit Card'} Purchase'
+                          : 'Expense')));
 
           final amountPrefix = isIncome ? '+' : '-';
           final amountColor =
               isIncome ? const Color(0xFF16A34A) : Colors.red.shade700;
+
           final iconBgColor = isIncome
               ? const Color(0xFF16A34A).withValues(alpha: 0.12)
-              : Colors.red.withValues(alpha: 0.12);
-          final iconColor =
-              isIncome ? const Color(0xFF16A34A) : Colors.red.shade700;
+              : (isCreditCardPayment
+                  ? const Color(0xFF2563EB).withValues(alpha: 0.12)
+                  : (isCreditCardPurchase
+                      ? AppTheme.secondaryColor.withValues(alpha: 0.12)
+                      : Colors.red.withValues(alpha: 0.12)));
+
+          final iconColor = isIncome
+              ? const Color(0xFF16A34A)
+              : (isCreditCardPayment
+                  ? const Color(0xFF2563EB)
+                  : (isCreditCardPurchase
+                      ? AppTheme.secondaryColor
+                      : Colors.red.shade700));
+
+          final iconData = isIncome
+              ? Icons.arrow_upward
+              : (isCreditCardPayment
+                  ? Icons.payments_outlined
+                  : (isCreditCardPurchase
+                      ? Icons.credit_card_outlined
+                      : Icons.arrow_downward));
+
+          final sourceLabel = isCreditCardPayment
+              ? '${card?.name ?? 'Credit Card'} • From ${account?.name ?? 'Account'}'
+              : (isCreditCardPurchase
+                  ? '${card?.name ?? 'Credit Card'} ****${card?.lastFourDigits ?? ''}'
+                  : (account?.name ?? 'Account'));
 
           return Card(
             child: Padding(
@@ -227,7 +270,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(
-                      isIncome ? Icons.arrow_upward : Icons.arrow_downward,
+                      iconData,
                       color: iconColor,
                       size: 22,
                     ),
@@ -251,7 +294,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                         Row(
                           children: [
                             Text(
-                              account.name,
+                              sourceLabel,
                               style: const TextStyle(
                                 fontSize: 13,
                                 color: AppTheme.textSecondary,
@@ -280,7 +323,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
 
                   // Amount
                   Text(
-                    '$amountPrefix${CurrencyFormatter.format(tx.amount, currency: account.currency)}',
+                    '$amountPrefix${CurrencyFormatter.format(tx.amount, currency: account?.currency ?? 'INR')}',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -296,3 +339,4 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     );
   }
 }
+

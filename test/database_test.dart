@@ -27,7 +27,7 @@ void main() {
 
   group('Milestone 2: Local Database Tests', () {
     test('Test 1 — Database initialization', () async {
-      expect(database.schemaVersion, equals(2));
+      expect(database.schemaVersion, equals(3));
       final accounts = await database.select(database.accounts).get();
       expect(accounts, isEmpty);
       final transactions = await database.select(database.transactions).get();

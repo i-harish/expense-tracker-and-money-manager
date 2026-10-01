@@ -48,7 +48,7 @@ void main() {
       expect(transactions.first.transaction.type,
           equals(TransactionType.income));
       expect(transactions.first.transaction.description, equals('Salary'));
-      expect(transactions.first.account.id, equals(accountId));
+      expect(transactions.first.account!.id, equals(accountId));
     });
 
     test('Test 2 — Record expense decreases balance and creates transaction',

@@ -1,19 +1,27 @@
 import 'package:flutter/material.dart';
 
 import '../../core/database/app_database.dart';
+import '../../core/database/tables/transactions.dart';
 import '../../core/utils/currency_formatter.dart';
 import '../../data/models/credit_card_extensions.dart';
+import '../../data/repositories/account_repository.dart';
 import '../../data/repositories/credit_card_repository.dart';
+import '../../data/services/financial_service.dart';
 import '../../theme/app_theme.dart';
+import '../transactions/widgets/transaction_form_dialog.dart';
 import 'widgets/credit_card_form_dialog.dart';
 import 'widgets/credit_card_item_card.dart';
 
 class CreditCardsScreen extends StatefulWidget {
   final CreditCardRepository? repository;
+  final FinancialService? financialService;
+  final AccountRepository? accountRepository;
 
   const CreditCardsScreen({
     super.key,
     this.repository,
+    this.financialService,
+    this.accountRepository,
   });
 
   @override
@@ -22,6 +30,8 @@ class CreditCardsScreen extends StatefulWidget {
 
 class _CreditCardsScreenState extends State<CreditCardsScreen> {
   late final CreditCardRepository _repository;
+  late final FinancialService _financialService;
+  late final AccountRepository _accountRepository;
   List<CreditCard> _cards = [];
   bool _isLoading = true;
   String? _errorMessage;
@@ -29,8 +39,12 @@ class _CreditCardsScreenState extends State<CreditCardsScreen> {
   @override
   void initState() {
     super.initState();
-    _repository = widget.repository ??
-        DriftCreditCardRepository(AppDatabase.instance);
+    final db = AppDatabase.instance;
+    _repository = widget.repository ?? DriftCreditCardRepository(db);
+    _financialService =
+        widget.financialService ?? DriftFinancialService(db);
+    _accountRepository =
+        widget.accountRepository ?? DriftAccountRepository(db);
     _loadCreditCards();
   }
 
@@ -77,6 +91,23 @@ class _CreditCardsScreenState extends State<CreditCardsScreen> {
       builder: (context) => CreditCardFormDialog(
         card: card,
         repository: _repository,
+      ),
+    );
+
+    if (result == true) {
+      _loadCreditCards();
+    }
+  }
+
+  Future<void> _openPaymentDialog(CreditCard card) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => TransactionFormDialog(
+        financialService: _financialService,
+        accountRepository: _accountRepository,
+        creditCardRepository: _repository,
+        initialType: TransactionType.creditCardPayment,
+        initialCreditCardId: card.id,
       ),
     );
 
@@ -210,6 +241,7 @@ class _CreditCardsScreenState extends State<CreditCardsScreen> {
                 card: card,
                 onEdit: () => _openEditCardDialog(card),
                 onDeactivate: () => _confirmDeactivateCard(card),
+                onPayment: () => _openPaymentDialog(card),
               );
             },
           ),
